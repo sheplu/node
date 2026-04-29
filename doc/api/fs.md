@@ -2239,6 +2239,60 @@ try {
 Aborting an ongoing request does not abort individual operating
 system requests but rather the internal buffering `fs.writeFile` performs.
 
+### `fsPromises.writeFileAtomic(file, data[, options])`
+
+<!-- YAML
+added: REPLACEME
+-->
+
+> Stability: 1 - Experimental
+
+* `file` {string|Buffer|URL} filename
+* `data` {string|Buffer|TypedArray|DataView}
+* `options` {Object|string}
+  * `encoding` {string|null} **Default:** `'utf8'`
+  * `mode` {integer} If omitted and the target file exists, the existing
+    file's mode is preserved. Otherwise **Default:** `0o666`.
+  * `flush` {boolean} If `true`, `fsync` is called on the temporary file and
+    its parent directory (on POSIX) so the rename survives a crash.
+    **Default:** `true`.
+  * `tmpSuffix` {string} Suffix used for the temporary file placed next to
+    the target. Must not contain path separators. **Default:** `'tmp'`.
+  * `signal` {AbortSignal} allows aborting an in-progress writeFileAtomic
+* Returns: {Promise} Fulfills with `undefined` upon success.
+
+Asynchronously writes data to a file atomically: the data is first written to
+a temporary file in the same directory as the target, `fsync`'d (when `flush`
+is `true`), and then renamed over the target. Readers always observe either
+the complete old contents or the complete new contents, never a partial
+write. If any step fails, the temporary file is unlinked and the error is
+propagated.
+
+Unlike [`fsPromises.writeFile()`][], `flush` defaults to `true` — durable
+writes are the primary purpose of the atomic variant.
+
+If `file` is a symbolic link, the link is resolved before the temporary file
+is placed, so the link itself is preserved and its target is replaced.
+
+Writing to a file descriptor or a {FileHandle} is not supported; pass a path
+instead.
+
+```mjs
+import { writeFileAtomic } from 'node:fs/promises';
+
+await writeFileAtomic('/etc/my-app/config.json',
+                      JSON.stringify({ port: 8080 }));
+```
+
+```cjs
+const { writeFileAtomic } = require('node:fs/promises');
+
+(async () => {
+  await writeFileAtomic('/etc/my-app/config.json',
+                        JSON.stringify({ port: 8080 }));
+})();
+```
+
 ### `fsPromises.constants`
 
 <!-- YAML
@@ -5611,6 +5665,54 @@ on the size of the original file, and the position of the file descriptor). If
 a file name had been used instead of a descriptor, the file would be guaranteed
 to contain only `', World'`.
 
+### `fs.writeFileAtomic(file, data[, options], callback)`
+
+<!-- YAML
+added: REPLACEME
+-->
+
+> Stability: 1 - Experimental
+
+* `file` {string|Buffer|URL}
+* `data` {string|Buffer|TypedArray|DataView}
+* `options` {Object|string}
+  * `encoding` {string|null} **Default:** `'utf8'`
+  * `mode` {integer} If omitted and the target file exists, the existing
+    file's mode is preserved. Otherwise **Default:** `0o666`.
+  * `flush` {boolean} If `true`, `fs.fsync()` is called on the temporary
+    file and its parent directory (on POSIX) so the rename survives a
+    crash. **Default:** `true`.
+  * `tmpSuffix` {string} Suffix used for the temporary file placed next to
+    the target. Must not contain path separators. **Default:** `'tmp'`.
+  * `signal` {AbortSignal} allows aborting an in-progress writeFileAtomic
+* `callback` {Function}
+  * `err` {Error}
+
+Asynchronously writes data to a file atomically: the data is first written to
+a temporary file in the same directory as the target, `fsync`'d (when `flush`
+is `true`), and then renamed over the target. Readers always observe either
+the complete old contents or the complete new contents, never a partial
+write. If any step fails, the temporary file is unlinked and the error is
+propagated to `callback`.
+
+Unlike [`fs.writeFile()`][], `flush` defaults to `true` — durable writes are
+the primary purpose of the atomic variant.
+
+If `file` is a symbolic link, the link is resolved before the temporary file
+is placed, so the link itself is preserved and its target is replaced.
+
+Writing to a file descriptor is not supported; pass a path instead.
+
+```mjs
+import { writeFileAtomic } from 'node:fs';
+
+writeFileAtomic('/etc/my-app/config.json',
+                JSON.stringify({ port: 8080 }),
+                (err) => {
+                  if (err) throw err;
+                });
+```
+
 ### `fs.writev(fd, buffers[, position], callback)`
 
 <!-- YAML
@@ -6836,6 +6938,42 @@ changes:
 
 For detailed information, see the documentation of the asynchronous version of
 this API: [`fs.utimes()`][].
+
+### `fs.writeFileAtomicSync(file, data[, options])`
+
+<!-- YAML
+added: REPLACEME
+-->
+
+> Stability: 1 - Experimental
+
+* `file` {string|Buffer|URL}
+* `data` {string|Buffer|TypedArray|DataView}
+* `options` {Object|string}
+  * `encoding` {string|null} **Default:** `'utf8'`
+  * `mode` {integer} If omitted and the target file exists, the existing
+    file's mode is preserved. Otherwise **Default:** `0o666`.
+  * `flush` {boolean} If `true`, `fs.fsyncSync()` is called on the
+    temporary file and its parent directory (on POSIX) so the rename
+    survives a crash. **Default:** `true`.
+  * `tmpSuffix` {string} Suffix used for the temporary file placed next to
+    the target. Must not contain path separators. **Default:** `'tmp'`.
+  * `signal` {AbortSignal} allows aborting between write chunks
+* Returns: `undefined`.
+
+Synchronous variant of [`fs.writeFileAtomic()`][]. Same semantics: temporary
+file placed next to the resolved target, optional `fsync`, then `rename`.
+On any error the temporary file is unlinked before the error propagates.
+
+Because each write chunk runs synchronously, `signal` is only checked
+between chunks — a blocked `writeSync` cannot be interrupted mid-call.
+
+```mjs
+import { writeFileAtomicSync } from 'node:fs';
+
+writeFileAtomicSync('/etc/my-app/config.json',
+                    JSON.stringify({ port: 8080 }));
+```
 
 ### `fs.writeFileSync(file, data[, options])`
 
@@ -9082,6 +9220,7 @@ the file contents.
 [`fs.write(fd, buffer...)`]: #fswritefd-buffer-offset-length-position-callback
 [`fs.write(fd, string...)`]: #fswritefd-string-position-encoding-callback
 [`fs.writeFile()`]: #fswritefilefile-data-options-callback
+[`fs.writeFileAtomic()`]: #fswritefileatomicfile-data-options-callback
 [`fs.writev()`]: #fswritevfd-buffers-position-callback
 [`fsPromises.access()`]: #fspromisesaccesspath-mode
 [`fsPromises.copyFile()`]: #fspromisescopyfilesrc-dest-mode
@@ -9091,6 +9230,7 @@ the file contents.
 [`fsPromises.rm()`]: #fspromisesrmpath-options
 [`fsPromises.stat()`]: #fspromisesstatpath-options
 [`fsPromises.utimes()`]: #fspromisesutimespath-atime-mtime
+[`fsPromises.writeFile()`]: #fspromiseswritefilefile-data-options
 [`inotify(7)`]: https://man7.org/linux/man-pages/man7/inotify.7.html
 [`kqueue(2)`]: https://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2
 [`minimatch`]: https://github.com/isaacs/minimatch
